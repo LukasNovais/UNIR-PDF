@@ -203,9 +203,13 @@
       renderFileList();
     };
 
-    clearAllBtn.addEventListener('click', () => {
+    function clearFiles() {
       pdfFiles = [];
       renderFileList();
+    }
+
+    clearAllBtn.addEventListener('click', () => {
+      clearFiles();
       hideStatus();
     });
 
@@ -214,14 +218,10 @@
       if (pdfFiles.length === 0) return 'PDF-Unificado.pdf';
 
       const names = pdfFiles.map(file => {
-        // Remove a extensão .pdf (case insensitive)
         return file.name.replace(/\.pdf$/i, '').trim();
       });
 
-      // Junta os nomes dos arquivos por underscore '_'
       const combined = names.join('_');
-      
-      // Limita o tamanho total do nome para evitar erros no sistema operacional (máx ~150 chars)
       const safeCombined = combined.length > 150 ? combined.substring(0, 150) + '_unificado' : combined;
 
       return `${safeCombined}.pdf`;
@@ -253,7 +253,7 @@
       URL.revokeObjectURL(url);
     }
 
-    // Ação 1: Unir e Baixar (com nome somado)
+    // Ação 1: Unir e Baixar (com nome somado e limpeza da lista)
     mergeDownloadBtn.addEventListener('click', async () => {
       if (pdfFiles.length < 2) {
         showStatus('Adicione pelo menos 2 arquivos PDF para unir.', 'bg-amber-100 text-amber-800');
@@ -264,10 +264,14 @@
       hideStatus();
 
       try {
-        const blob = await mergePdfs();
         const customFilename = generateMergedFilename();
+        const blob = await mergePdfs();
         
         triggerDownload(blob, customFilename);
+        
+        // Limpa a lista de arquivos após concluir a ação
+        clearFiles();
+        
         showStatus(`PDFs unidos com sucesso! Arquivo gerado: "${customFilename}"`, 'bg-emerald-100 text-emerald-800');
       } catch (error) {
         console.error(error);
@@ -277,7 +281,7 @@
       }
     });
 
-    // Ação 2: Compartilhar no WhatsApp (com nome somado)
+    // Ação 2: Compartilhar no WhatsApp (com nome somado e limpeza da lista)
     mergeWhatsappBtn.addEventListener('click', async () => {
       if (pdfFiles.length < 2) {
         showStatus('Adicione pelo menos 2 arquivos PDF para unir.', 'bg-amber-100 text-amber-800');
@@ -288,8 +292,8 @@
       hideStatus();
 
       try {
-        const blob = await mergePdfs();
         const customFilename = generateMergedFilename();
+        const blob = await mergePdfs();
         const file = new File([blob], customFilename, { type: 'application/pdf' });
 
         // Tenta usar Web Share API se suportado (celulares)
@@ -300,6 +304,7 @@
               title: 'PDF Unificado',
               text: 'Segue o documento PDF unificado.'
             });
+            clearFiles();
             showStatus('PDF compartilhado com sucesso!', 'bg-emerald-100 text-emerald-800');
             return;
           } catch (shareErr) {
@@ -315,6 +320,9 @@
         
         const message = encodeURIComponent(`Olá! Segue o arquivo PDF unificado (${customFilename}) em anexo.`);
         window.open(`https://web.whatsapp.com/send?text=${message}`, '_blank');
+
+        // Limpa a lista de arquivos após concluir a ação
+        clearFiles();
 
         showStatus(`O PDF foi baixado como "${customFilename}" e o WhatsApp Web foi aberto! Basta arrastar o arquivo para a conversa.`, 'bg-emerald-100 text-emerald-800');
 

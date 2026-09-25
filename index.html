@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Juntar PDFs - Simples, Rápido e Privado</title>
+  
+  <!-- Estilos e Fontes -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet" />
+  
+  <!-- Biblioteca pdf-lib para mesclar os PDFs no navegador -->
+  <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+
+  <style>
+    .drag-over {
+      border-color: #3b82f6 !important;
+      background-color: #eff6ff !important;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+  <!-- Cabeçalho -->
+  <header class="bg-white border-b border-slate-200 py-4 px-6 shadow-sm">
+    <div class="max-w-4xl mx-auto flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="bg-red-500 text-white p-2 rounded-lg flex items-center justify-center w-10 h-10">
+          <i class="fa-solid fa-file-pdf text-xl"></i>
+        </div>
+        <h1 class="text-xl font-bold text-slate-900">Mesclador de PDF</h1>
+      </div>
+      <span class="text-xs bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full font-medium flex items-center gap-1">
+        <i class="fa-solid fa-lock text-[10px]"></i> 100% Local & Privado
+      </span>
+    </div>
+  </header>
+
+  <!-- Conteúdo Principal -->
+  <main class="flex-1 max-w-4xl w-full mx-auto p-4 sm:p-6 flex flex-col gap-6">
+
+    <!-- Área de Arrastar e Soltar (Dropzone) -->
+    <div 
+      id="dropzone" 
+      class="border-2 border-dashed border-slate-300 bg-white rounded-2xl p-8 text-center cursor-pointer hover:border-blue-500 transition-all duration-200 shadow-sm flex flex-col items-center justify-center gap-3 min-h-[200px]"
+    >
+      <input type="file" id="fileInput" multiple accept="application/pdf" class="hidden" />
+      <div class="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center text-2xl mb-1">
+        <i class="fa-solid fa-cloud-arrow-up"></i>
+      </div>
+      <h2 class="text-lg font-semibold text-slate-700">Arraste e solte seus PDFs aqui</h2>
+      <p class="text-sm text-slate-500">ou <span class="text-blue-600 font-medium hover:underline">clique para selecionar os arquivos</span></p>
+      <p class="text-xs text-slate-400 mt-2">Suporta múltiplos arquivos PDF simultaneamente</p>
+    </div>
+
+    <!-- Lista de Arquivos Selecionados -->
+    <div id="fileSection" class="hidden flex-col gap-4">
+      <div class="flex items-center justify-between">
+        <h3 class="font-semibold text-slate-700 text-base">
+          Arquivos selecionados (<span id="fileCount">0</span>)
+        </h3>
+        <button 
+          id="clearAllBtn" 
+          class="text-xs text-rose-600 hover:text-rose-800 font-medium transition-colors"
+        >
+          Limpar tudo
+        </button>
+      </div>
+
+      <ul id="fileList" class="space-y-2">
+        <!-- Lista injetada via JS -->
+      </ul>
+
+      <!-- Ações: Baixar ou Enviar pelo WhatsApp -->
+      <div class="flex flex-col sm:flex-row gap-3 pt-4 border-t border-slate-200">
+        <button 
+          id="mergeDownloadBtn" 
+          class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-5 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 text-base cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <i class="fa-solid fa-download"></i> Unir e Baixar
+        </button>
+
+        <button 
+          id="mergeWhatsappBtn" 
+          class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-3 px-5 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 text-base cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <i class="fa-brands fa-whatsapp text-lg"></i> Unir e Abrir no WhatsApp
+        </button>
+      </div>
+    </div>
+
+    <!-- Mensagem/Status -->
+    <div id="statusMessage" class="hidden p-4 rounded-xl text-sm text-center font-medium"></div>
+
+  </main>
+
+  <!-- Rodapé -->
+  <footer class="py-6 border-t border-slate-200 text-center text-xs text-slate-500">
+    Seus arquivos não são enviados para nenhum servidor. O processamento é feito inteiramente no seu navegador.
+  </footer>
+
+  <script>
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('fileInput');
+    const fileSection = document.getElementById('fileSection');
+    const fileList = document.getElementById('fileList');
+    const fileCount = document.getElementById('fileCount');
+    const clearAllBtn = document.getElementById('clearAllBtn');
+    const mergeDownloadBtn = document.getElementById('mergeDownloadBtn');
+    const mergeWhatsappBtn = document.getElementById('mergeWhatsappBtn');
+    const statusMessage = document.getElementById('statusMessage');
+
+    let pdfFiles = [];
+
+    // Clique na dropzone dispara a seleção de arquivos
+    dropzone.addEventListener('click', () => fileInput.click());
+
+    // Eventos de drag and drop
+    ['dragenter', 'dragover'].forEach(eventName => {
+      dropzone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropzone.classList.add('drag-over');
+      });
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+      dropzone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropzone.classList.remove('drag-over');
+      });
+    });
+
+    dropzone.addEventListener('drop', (e) => {
+      const files = Array.from(e.dataTransfer.files).filter(f => f.type === 'application/pdf');
+      if (files.length > 0) handleFiles(files);
+      else showStatus('Por favor, selecione apenas arquivos PDF.', 'bg-amber-100 text-amber-800');
+    });
+
+    fileInput.addEventListener('change', (e) => {
+      const files = Array.from(e.target.files);
+      if (files.length > 0) handleFiles(files);
+      fileInput.value = '';
+    });
+
+    function handleFiles(files) {
+      pdfFiles = [...pdfFiles, ...files];
+      renderFileList();
+    }
+
+    function renderFileList() {
+      fileList.innerHTML = '';
+      
+      if (pdfFiles.length === 0) {
+        fileSection.classList.add('hidden');
+        return;
+      }
+
+      fileSection.classList.remove('hidden');
+      fileCount.textContent = pdfFiles.length;
+
+      pdfFiles.forEach((file, index) => {
+        const li = document.createElement('li');
+        li.className = 'bg-white border border-slate-200 rounded-xl p-3 flex items-center justify-between shadow-sm hover:border-slate-300 transition-all';
+        
+        li.innerHTML = `
+          <div class="flex items-center gap-3 overflow-hidden pr-2">
+            <span class="text-xs font-semibold text-slate-400 bg-slate-100 px-2 py-1 rounded">${index + 1}</span>
+            <i class="fa-solid fa-file-pdf text-red-500 text-lg flex-shrink-0"></i>
+            <div class="truncate">
+              <p class="text-sm font-medium text-slate-800 truncate">${escapeHtml(file.name)}</p>
+              <p class="text-xs text-slate-400">${(file.size / (1024 * 1024)).toFixed(2)} MB</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-1">
+            <button onclick="moveFile(${index}, -1)" class="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 ${index === 0 ? 'opacity-30 cursor-not-allowed' : ''}" title="Mover para cima">
+              <i class="fa-solid fa-arrow-up text-xs"></i>
+            </button>
+            <button onclick="moveFile(${index}, 1)" class="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 ${index === pdfFiles.length - 1 ? 'opacity-30 cursor-not-allowed' : ''}" title="Mover para baixo">
+              <i class="fa-solid fa-arrow-down text-xs"></i>
+            </button>
+            <button onclick="removeFile(${index})" class="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 ml-1" title="Remover">
+              <i class="fa-solid fa-trash-can text-xs"></i>
+            </button>
+          </div>
+        `;
+        fileList.appendChild(li);
+      });
+    }
+
+    window.moveFile = function(index, direction) {
+      const newIndex = index + direction;
+      if (newIndex < 0 || newIndex >= pdfFiles.length) return;
+      const temp = pdfFiles[index];
+      pdfFiles[index] = pdfFiles[newIndex];
+      pdfFiles[newIndex] = temp;
+      renderFileList();
+    };
+
+    window.removeFile = function(index) {
+      pdfFiles.splice(index, 1);
+      renderFileList();
+    };
+
+    clearAllBtn.addEventListener('click', () => {
+      pdfFiles = [];
+      renderFileList();
+      hideStatus();
+    });
+
+    // Função interna para unir PDFs
+    async function mergePdfs() {
+      const mergedPdf = await PDFLib.PDFDocument.create();
+
+      for (const file of pdfFiles) {
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await PDFLib.PDFDocument.load(arrayBuffer);
+        const copiedPages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
+        copiedPages.forEach((page) => mergedPdf.addPage(page));
+      }
+
+      const mergedPdfBytes = await mergedPdf.save();
+      return new Blob([mergedPdfBytes], { type: 'application/pdf' });
+    }
+
+    function triggerDownload(blob, filename = 'pdf-unificado.pdf') {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    // Ação 1: Unir e Baixar
+    mergeDownloadBtn.addEventListener('click', async () => {
+      if (pdfFiles.length < 2) {
+        showStatus('Adicione pelo menos 2 arquivos PDF para unir.', 'bg-amber-100 text-amber-800');
+        return;
+      }
+
+      setButtonsState(true, 'Processando...');
+      hideStatus();
+
+      try {
+        const blob = await mergePdfs();
+        triggerDownload(blob);
+        showStatus('PDFs unidos com sucesso! O download começou automaticamente.', 'bg-emerald-100 text-emerald-800');
+      } catch (error) {
+        console.error(error);
+        showStatus('Ocorreu um erro ao unir os arquivos. Verifique se nenhum arquivo está protegido por senha.', 'bg-rose-100 text-rose-800');
+      } finally {
+        resetButtonsState();
+      }
+    });
+
+    // Ação 2: Unir e Enviar para o WhatsApp
+    mergeWhatsappBtn.addEventListener('click', async () => {
+      if (pdfFiles.length < 2) {
+        showStatus('Adicione pelo menos 2 arquivos PDF para unir.', 'bg-amber-100 text-amber-800');
+        return;
+      }
+
+      setButtonsState(true, 'Gerando...');
+      hideStatus();
+
+      try {
+        const blob = await mergePdfs();
+        
+        // 1. Baixa o arquivo para o computador do usuário
+        triggerDownload(blob, 'PDF-Unificado.pdf');
+
+        // 2. Abre o WhatsApp Web com texto pré-definido
+        const message = encodeURIComponent('Olá! Segue o arquivo PDF unificado em anexo.');
+        const whatsappUrl = `https://web.whatsapp.com/send?text=${message}`;
+        
+        window.open(whatsappUrl, '_blank');
+
+        showStatus('PDF salvo na pasta de downloads! O WhatsApp Web foi aberto. Agora basta anexar ou arrastar o arquivo "PDF-Unificado.pdf" na conversa.', 'bg-emerald-100 text-emerald-800');
+      } catch (error) {
+        console.error(error);
+        showStatus('Ocorreu um erro ao gerar o arquivo para envio.', 'bg-rose-100 text-rose-800');
+      } finally {
+        resetButtonsState();
+      }
+    });
+
+    function setButtonsState(disabled, text) {
+      mergeDownloadBtn.disabled = disabled;
+      mergeWhatsappBtn.disabled = disabled;
+      if (disabled) {
+        mergeDownloadBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${text}`;
+        mergeWhatsappBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${text}`;
+      }
+    }
+
+    function resetButtonsState() {
+      mergeDownloadBtn.disabled = false;
+      mergeWhatsappBtn.disabled = false;
+      mergeDownloadBtn.innerHTML = '<i class="fa-solid fa-download"></i> Unir e Baixar';
+      mergeWhatsappBtn.innerHTML = '<i class="fa-brands fa-whatsapp text-lg"></i> Unir e Abrir no WhatsApp';
+    }
+
+    function showStatus(text, bgClass) {
+      statusMessage.className = `p-4 rounded-xl text-sm text-center font-medium ${bgClass}`;
+      statusMessage.textContent = text;
+      statusMessage.classList.remove('hidden');
+    }
+
+    function hideStatus() {
+      statusMessage.classList.add('hidden');
+    }
+
+    function escapeHtml(text) {
+      return text.replace(/[&<>"']/g, function(m) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
+      });
+    }
+  </script>
+</body>
+</html>

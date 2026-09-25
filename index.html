@@ -209,6 +209,24 @@
       hideStatus();
     });
 
+    // Função para gerar o nome combinado com base nos arquivos selecionados
+    function generateMergedFilename() {
+      if (pdfFiles.length === 0) return 'PDF-Unificado.pdf';
+
+      const names = pdfFiles.map(file => {
+        // Remove a extensão .pdf (case insensitive)
+        return file.name.replace(/\.pdf$/i, '').trim();
+      });
+
+      // Junta os nomes dos arquivos por underscore '_'
+      const combined = names.join('_');
+      
+      // Limita o tamanho total do nome para evitar erros no sistema operacional (máx ~150 chars)
+      const safeCombined = combined.length > 150 ? combined.substring(0, 150) + '_unificado' : combined;
+
+      return `${safeCombined}.pdf`;
+    }
+
     // Unir PDFs
     async function mergePdfs() {
       const mergedPdf = await PDFLib.PDFDocument.create();
@@ -224,7 +242,7 @@
       return new Blob([mergedPdfBytes], { type: 'application/pdf' });
     }
 
-    function triggerDownload(blob, filename = 'PDF-Unificado.pdf') {
+    function triggerDownload(blob, filename) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -235,7 +253,7 @@
       URL.revokeObjectURL(url);
     }
 
-    // Ação 1: Unir e Baixar
+    // Ação 1: Unir e Baixar (com nome somado)
     mergeDownloadBtn.addEventListener('click', async () => {
       if (pdfFiles.length < 2) {
         showStatus('Adicione pelo menos 2 arquivos PDF para unir.', 'bg-amber-100 text-amber-800');
@@ -247,8 +265,10 @@
 
       try {
         const blob = await mergePdfs();
-        triggerDownload(blob);
-        showStatus('PDFs unidos com sucesso! O download começou automaticamente.', 'bg-emerald-100 text-emerald-800');
+        const customFilename = generateMergedFilename();
+        
+        triggerDownload(blob, customFilename);
+        showStatus(`PDFs unidos com sucesso! Arquivo gerado: "${customFilename}"`, 'bg-emerald-100 text-emerald-800');
       } catch (error) {
         console.error(error);
         showStatus('Erro ao processar os PDFs. Verifique se nenhum arquivo tem senha.', 'bg-rose-100 text-rose-800');
@@ -257,7 +277,7 @@
       }
     });
 
-    // Ação 2: Compartilhar no WhatsApp
+    // Ação 2: Compartilhar no WhatsApp (com nome somado)
     mergeWhatsappBtn.addEventListener('click', async () => {
       if (pdfFiles.length < 2) {
         showStatus('Adicione pelo menos 2 arquivos PDF para unir.', 'bg-amber-100 text-amber-800');
@@ -269,9 +289,10 @@
 
       try {
         const blob = await mergePdfs();
-        const file = new File([blob], 'PDF-Unificado.pdf', { type: 'application/pdf' });
+        const customFilename = generateMergedFilename();
+        const file = new File([blob], customFilename, { type: 'application/pdf' });
 
-        // Tenta usar Web Share API se suportado (principalmente dispositivos móveis)
+        // Tenta usar Web Share API se suportado (celulares)
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
           try {
             await navigator.share({
@@ -282,7 +303,6 @@
             showStatus('PDF compartilhado com sucesso!', 'bg-emerald-100 text-emerald-800');
             return;
           } catch (shareErr) {
-            // Se o usuário cancelou o compartilhamento
             if (shareErr.name === 'AbortError') {
               showStatus('Compartilhamento cancelado.', 'bg-amber-100 text-amber-800');
               return;
@@ -290,13 +310,13 @@
           }
         }
 
-        // Fallback para Web / PC: Baixa o PDF e abre o WhatsApp Web
-        triggerDownload(blob, 'PDF-Unificado.pdf');
+        // Fallback para Web / PC: Baixa com o nome somado e abre o WhatsApp Web
+        triggerDownload(blob, customFilename);
         
-        const message = encodeURIComponent('Olá! Segue o arquivo PDF unificado em anexo.');
+        const message = encodeURIComponent(`Olá! Segue o arquivo PDF unificado (${customFilename}) em anexo.`);
         window.open(`https://web.whatsapp.com/send?text=${message}`, '_blank');
 
-        showStatus('O PDF foi baixado na sua máquina e o WhatsApp Web foi aberto! Basta arrastar o arquivo baixado para dentro da conversa.', 'bg-emerald-100 text-emerald-800');
+        showStatus(`O PDF foi baixado como "${customFilename}" e o WhatsApp Web foi aberto! Basta arrastar o arquivo para a conversa.`, 'bg-emerald-100 text-emerald-800');
 
       } catch (error) {
         console.error('Erro no fluxo de WhatsApp:', error);
